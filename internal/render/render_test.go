@@ -9,7 +9,10 @@ import (
 	"testing"
 
 	"github.com/wei/llmterm/internal/backend/claude"
+	"github.com/wei/llmterm/internal/event"
 )
+
+var _ = event.KindIgnored
 
 var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 

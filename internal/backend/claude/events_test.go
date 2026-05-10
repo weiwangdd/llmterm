@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"os"
 	"testing"
+
+	"github.com/wei/llmterm/internal/event"
 )
 
 func TestParseFixture(t *testing.T) {
@@ -13,11 +15,10 @@ func TestParseFixture(t *testing.T) {
 	}
 	defer f.Close()
 
-	counts := map[EventKind]int{}
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 1024*1024), 8*1024*1024)
 	var sawText, sawToolUse, sawToolResult, sawFinal bool
-	var lastFinal *FinalResult
+	var lastFinal *event.Final
 
 	for sc.Scan() {
 		line := sc.Bytes()
@@ -28,21 +29,20 @@ func TestParseFixture(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parse: %v\nline=%s", err, line)
 		}
-		counts[ev.Kind]++
 		switch ev.Kind {
-		case KindTextDelta:
+		case event.KindTextDelta:
 			if ev.Text.Text != "" {
 				sawText = true
 			}
-		case KindToolUse:
+		case event.KindToolUse:
 			if ev.Tool.Name == "Bash" && ev.Tool.Input["command"] == "ls -la" {
 				sawToolUse = true
 			}
-		case KindToolResult:
+		case event.KindToolResult:
 			if ev.Result.Content != "" && !ev.Result.IsError {
 				sawToolResult = true
 			}
-		case KindFinal:
+		case event.KindFinal:
 			sawFinal = true
 			lastFinal = ev.Final
 		}

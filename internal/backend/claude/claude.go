@@ -1,3 +1,5 @@
+// Package claude adapts the locally-installed `claude` CLI (Claude Code) to
+// llmterm's backend.Backend interface.
 package claude
 
 import (
@@ -7,6 +9,16 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+
+	"github.com/wei/llmterm/internal/backend"
+	"github.com/wei/llmterm/internal/event"
+)
+
+func init() { backend.Register(&Backend{}) }
+
+const (
+	readOnlyTools = "Read Glob Grep WebFetch WebSearch"
+	writeTools    = "Read Glob Grep WebFetch WebSearch Bash Edit Write"
 )
 
 const nonInteractiveSystemPrompt = `You are running inside llmterm, a non-interactive single-shot session.
@@ -20,40 +32,36 @@ do not ask. Instead, finish with a brief one-line note like:
   "(needs Bash; rerun: llm! <same prompt>)"
 and stop. Be concise: this output goes straight to the user's terminal.`
 
-// Options drives one invocation of the claude CLI.
-type Options struct {
-	Prompt       string
-	CWD          string
-	AllowedTools []string
-	ResumeID     string // if set, passes --resume <id>
-	Model        string // optional, e.g. "claude-sonnet-4-6"
-	ExtraArgs    []string
+type Backend struct{}
+
+func (b *Backend) Name() string { return "claude" }
+
+func (b *Backend) Available(ctx context.Context) error {
+	if _, err := exec.LookPath("claude"); err != nil {
+		return fmt.Errorf("claude CLI not found in PATH (install: https://docs.anthropic.com/claude/docs/claude-code)")
+	}
+	return nil
 }
 
-// Run starts `claude -p` and streams parsed events into the returned channel.
-// The channel closes when the child exits. ctx cancellation kills the child.
-// The error channel reports spawn / decode / process-exit issues.
-func Run(ctx context.Context, opts Options) (<-chan Event, <-chan error, error) {
+func (b *Backend) Run(ctx context.Context, opts backend.Options) (<-chan event.Event, <-chan error, error) {
+	tools := readOnlyTools
+	if opts.Unsafe {
+		tools = writeTools
+	}
 	args := []string{
 		"-p", opts.Prompt,
 		"--output-format", "stream-json",
 		"--include-partial-messages",
 		"--verbose",
 		"--append-system-prompt", nonInteractiveSystemPrompt,
+		"--allowedTools", tools,
 	}
 	if opts.CWD != "" {
 		args = append(args, "--add-dir", opts.CWD)
 	}
-	if len(opts.AllowedTools) > 0 {
-		args = append(args, "--allowedTools", strings.Join(opts.AllowedTools, " "))
-	}
 	if opts.ResumeID != "" {
 		args = append(args, "--resume", opts.ResumeID)
 	}
-	if opts.Model != "" {
-		args = append(args, "--model", opts.Model)
-	}
-	args = append(args, opts.ExtraArgs...)
 
 	cmd := exec.CommandContext(ctx, "claude", args...)
 	cmd.Dir = opts.CWD
@@ -71,14 +79,11 @@ func Run(ctx context.Context, opts Options) (<-chan Event, <-chan error, error) 
 		return nil, nil, fmt.Errorf("start claude: %w", err)
 	}
 
-	events := make(chan Event, 32)
+	events := make(chan event.Event, 32)
 	errs := make(chan error, 2)
 
-	// Drain stderr in the background; surface only on non-zero exit.
 	stderrBuf := &strings.Builder{}
-	go func() {
-		_, _ = io.Copy(stderrBuf, stderr)
-	}()
+	go func() { _, _ = io.Copy(stderrBuf, stderr) }()
 
 	go func() {
 		defer close(events)
@@ -95,7 +100,7 @@ func Run(ctx context.Context, opts Options) (<-chan Event, <-chan error, error) 
 				errs <- fmt.Errorf("parse: %w", perr)
 				continue
 			}
-			if ev.Kind == KindIgnored {
+			if ev.Kind == event.KindIgnored {
 				continue
 			}
 			select {

@@ -7,23 +7,21 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"os/signal"
+	"sort"
 	"strings"
 	"syscall"
 
-	"github.com/wei/llmterm/internal/backend/claude"
+	"github.com/wei/llmterm/internal/backend"
+	_ "github.com/wei/llmterm/internal/backend/claude"
+	_ "github.com/wei/llmterm/internal/backend/codex"
+	_ "github.com/wei/llmterm/internal/backend/gemini"
+	"github.com/wei/llmterm/internal/config"
 	"github.com/wei/llmterm/internal/render"
 	"github.com/wei/llmterm/internal/session"
 )
 
-const (
-	version = "0.1.0"
-	// Read-only default tool set: safe to run without prompting.
-	readOnlyTools = "Read Glob Grep WebFetch WebSearch"
-	// Full set granted when the user opts in via `llm! ...` (Bash/Edit/Write enabled).
-	writeTools = "Read Glob Grep WebFetch WebSearch Bash Edit Write"
-)
+const version = "0.2.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -33,6 +31,8 @@ func main() {
 	switch os.Args[1] {
 	case "run":
 		os.Exit(cmdRun(os.Args[2:]))
+	case "use":
+		os.Exit(cmdUse(os.Args[2:]))
 	case "doctor":
 		os.Exit(cmdDoctor())
 	case "init":
@@ -49,11 +49,12 @@ func main() {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintf(w, `llmterm %s — terminal-native agent mode for your existing Claude Code
+	fmt.Fprintf(w, `llmterm %s — terminal-native agent mode for your existing Claude / Codex / Gemini CLI
 
 Commands:
-  llmterm run [--unsafe] -- <prompt...>   Run one prompt against claude.
-  llmterm doctor                          Check that claude is installed & authed.
+  llmterm run [--unsafe] -- <prompt...>   Run one prompt against the selected backend.
+  llmterm use [claude|codex|gemini]       Switch backend (no arg = claude).
+  llmterm doctor                          Check the active backend is installed & authed.
   llmterm init zsh                        Print the zsh integration script.
   llmterm version                         Print version.
 
@@ -64,7 +65,7 @@ or "llm! " (also allows Bash/Edit/Write) and forwards the rest to llmterm run.
 
 func cmdRun(args []string) int {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
-	unsafe := fs.Bool("unsafe", false, "allow Bash/Edit/Write tools (write mode)")
+	unsafe := fs.Bool("unsafe", false, "allow Bash/Edit/Write tools")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -75,30 +76,28 @@ func cmdRun(args []string) int {
 	}
 
 	cwd, _ := os.Getwd()
-	store := session.Open(session.DefaultPath())
+	cfg := config.Load()
+	be, err := backend.Get(cfg.Backend)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "llmterm:", err)
+		return 1
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sigC := make(chan os.Signal, 1)
 	signal.Notify(sigC, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-sigC
-		cancel()
-	}()
+	go func() { <-sigC; cancel() }()
 
-	allowed := readOnlyTools
-	if *unsafe {
-		allowed = writeTools
-	}
+	store := session.Open(session.DefaultPath())
+	resumeKey := cfg.Backend + ":" + cwd
 
-	opts := claude.Options{
-		Prompt:       prompt,
-		CWD:          cwd,
-		AllowedTools: strings.Fields(allowed),
-		ResumeID:     store.Resume(cwd),
-	}
-
-	events, errs, err := claude.Run(ctx, opts)
+	events, errs, err := be.Run(ctx, backend.Options{
+		Prompt:   prompt,
+		CWD:      cwd,
+		Unsafe:   *unsafe,
+		ResumeID: store.Resume(resumeKey),
+	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "llmterm:", err)
 		return 1
@@ -107,7 +106,6 @@ func cmdRun(args []string) int {
 	r := render.New(os.Stdout, isTTY(os.Stdout))
 	var sid string
 	var sawFinal bool
-
 	for events != nil || errs != nil {
 		select {
 		case ev, ok := <-events:
@@ -132,9 +130,8 @@ func cmdRun(args []string) int {
 			}
 		}
 	}
-
 	if sid != "" {
-		store.Save(cwd, sid)
+		store.Save(resumeKey, sid)
 	}
 	if !sawFinal {
 		return 1
@@ -142,50 +139,52 @@ func cmdRun(args []string) int {
 	return 0
 }
 
-func cmdDoctor() int {
-	fmt.Print("checking claude... ")
-	out, err := exec.Command("claude", "--version").Output()
+func cmdUse(args []string) int {
+	name := "claude"
+	if len(args) > 0 && args[0] != "" {
+		name = args[0]
+	}
+	be, err := backend.Get(name)
 	if err != nil {
-		fmt.Println("MISSING")
-		fmt.Println("  install: https://docs.anthropic.com/claude/docs/claude-code")
+		fmt.Fprintln(os.Stderr, "llmterm use:", err)
+		return 2
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	cancel()
+	_ = ctx
+	if availErr := be.Available(context.Background()); availErr != nil {
+		fmt.Fprintln(os.Stderr, "warn:", availErr)
+		fmt.Fprintln(os.Stderr, "(saved anyway; install the CLI then run `llmterm doctor`)")
+	}
+	cfg := config.Load()
+	cfg.Backend = name
+	if err := config.Save(cfg); err != nil {
+		fmt.Fprintln(os.Stderr, "llmterm use: save failed:", err)
 		return 1
 	}
-	fmt.Print("ok (", strings.TrimSpace(string(out)), ")  ")
+	fmt.Printf("backend: %s\n", name)
+	return 0
+}
 
-	fmt.Print("auth probe... ")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "claude", "-p", "ok", "--output-format", "stream-json", "--include-partial-messages", "--verbose")
-	stdout, _ := cmd.StdoutPipe()
-	cmd.Stderr = os.Stderr
-	if err := cmd.Start(); err != nil {
-		fmt.Println("FAILED:", err)
-		return 1
-	}
-	probeOK := false
-	go func() {
-		buf := make([]byte, 4096)
-		for {
-			n, err := stdout.Read(buf)
-			if n > 0 {
-				if strings.Contains(string(buf[:n]), `"type":"result"`) {
-					probeOK = true
-					cancel()
-					return
-				}
-			}
-			if err != nil {
-				return
-			}
+func cmdDoctor() int {
+	cfg := config.Load()
+	fmt.Printf("active backend: %s\n", cfg.Backend)
+
+	names := backend.Names()
+	sort.Strings(names)
+	for _, n := range names {
+		b, _ := backend.Get(n)
+		marker := "  "
+		if n == cfg.Backend {
+			marker = "* "
 		}
-	}()
-	_ = cmd.Wait()
-	if !probeOK {
-		fmt.Println("FAILED — try `claude /login`")
-		return 1
+		fmt.Printf("%s%s: ", marker, n)
+		if err := b.Available(context.Background()); err != nil {
+			fmt.Println("MISSING —", err)
+			continue
+		}
+		fmt.Println("ok")
 	}
-	fmt.Println("ok")
-	fmt.Println("ready.")
 	return 0
 }
 
@@ -214,28 +213,33 @@ __llmterm_dispatch() {
     zle accept-line
     return
   fi
-  local prompt mode
+  local args mode is_use
   if [[ "$buf" == "llm! "* ]]; then
-    prompt="${buf#llm! }"; mode="--unsafe"
+    args="${buf#llm! }"; mode="--unsafe"
   elif [[ "$buf" == "llm "* ]]; then
-    prompt="${buf#llm }"; mode=""
+    args="${buf#llm }"; mode=""
+  elif [[ "$buf" == "llm" ]]; then
+    args=""; mode=""
   else
     zle accept-line
     return
   fi
-  if [[ -z "$prompt" ]]; then
-    zle accept-line
-    return
-  fi
-  # Move past the prompt line zsh already drew, then echo the original
-  # input on its own line so it appears in scrollback like a normal command.
+  # Bare "llm" with nothing after it falls through to claude usage hint.
   BUFFER=""
   zle -I
   print -rP -- "%B%F{cyan}❯%f%b $buf"
-  if [[ -n "$mode" ]]; then
-    command llmterm run $mode -- "$prompt"
+  if [[ "$args" == "use"* ]]; then
+    # Subcommand: switch backend. Arg shape: "use" or "use <name>".
+    local sub="${args#use}"; sub="${sub# }"
+    command llmterm use $sub
+  elif [[ -z "$args" ]]; then
+    command llmterm help
   else
-    command llmterm run -- "$prompt"
+    if [[ -n "$mode" ]]; then
+      command llmterm run $mode -- "$args"
+    else
+      command llmterm run -- "$args"
+    fi
   fi
   zle reset-prompt
 }

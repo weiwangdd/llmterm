@@ -3,73 +3,14 @@ package claude
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/wei/llmterm/internal/event"
 )
 
-// Event is the parsed union of one NDJSON line from `claude -p --output-format=stream-json`.
-// Only the fields llmterm needs are decoded; the raw line is kept for debugging.
-type Event struct {
-	Kind    EventKind
-	Raw     []byte
-	Init    *InitEvent
-	Text    *TextDelta
-	Tool    *ToolUse
-	Result  *ToolResult
-	Final   *FinalResult
-	Err     *ErrorEvent
-}
-
-type EventKind int
-
-const (
-	KindIgnored EventKind = iota
-	KindInit
-	KindTextDelta
-	KindToolUse
-	KindToolResult
-	KindFinal
-	KindError
-)
-
-type InitEvent struct {
-	SessionID  string
-	CWD        string
-	Model      string
-}
-
-type TextDelta struct {
-	Text string
-}
-
-type ToolUse struct {
-	ID    string
-	Name  string
-	Input map[string]any
-}
-
-type ToolResult struct {
-	ToolUseID string
-	Content   string
-	IsError   bool
-}
-
-type FinalResult struct {
-	SessionID        string
-	IsError          bool
-	Result           string
-	DurationMS       int
-	NumTurns         int
-	TotalCostUSD     float64
-	PermissionDenied []map[string]any
-}
-
-type ErrorEvent struct {
-	Message string
-}
-
-// Parse decodes one NDJSON line. Returns an Event whose Kind tells the consumer
-// which payload field to read. Lines we don't care about return KindIgnored.
-func Parse(line []byte) (Event, error) {
-	ev := Event{Raw: line}
+// Parse decodes one NDJSON line from `claude -p --output-format=stream-json`.
+// Lines we don't care about return KindIgnored.
+func Parse(line []byte) (event.Event, error) {
+	var ev event.Event
 	var head struct {
 		Type    string `json:"type"`
 		Subtype string `json:"subtype"`
@@ -89,16 +30,13 @@ func Parse(line []byte) (Event, error) {
 			if err := json.Unmarshal(line, &x); err != nil {
 				return ev, err
 			}
-			ev.Kind = KindInit
-			ev.Init = &InitEvent{SessionID: x.SessionID, CWD: x.CWD, Model: x.Model}
+			ev.Kind = event.KindInit
+			ev.Init = &event.Init{SessionID: x.SessionID, CWD: x.CWD, Model: x.Model}
 			return ev, nil
 		}
-		// hook_started, hook_response, status — noise
 		return ev, nil
 
 	case "stream_event":
-		// Only consume text_delta partials; tool_use comes via the consolidated
-		// `assistant` event so we don't have to reconstruct partial JSON.
 		var x struct {
 			Event struct {
 				Type  string `json:"type"`
@@ -112,13 +50,12 @@ func Parse(line []byte) (Event, error) {
 			return ev, err
 		}
 		if x.Event.Type == "content_block_delta" && x.Event.Delta.Type == "text_delta" {
-			ev.Kind = KindTextDelta
-			ev.Text = &TextDelta{Text: x.Event.Delta.Text}
+			ev.Kind = event.KindTextDelta
+			ev.Text = &event.TextDelta{Text: x.Event.Delta.Text}
 		}
 		return ev, nil
 
 	case "assistant":
-		// Full assistant message after streaming. Use this to detect tool_use blocks.
 		var x struct {
 			Message struct {
 				Content []struct {
@@ -134,15 +71,14 @@ func Parse(line []byte) (Event, error) {
 		}
 		for _, c := range x.Message.Content {
 			if c.Type == "tool_use" {
-				ev.Kind = KindToolUse
-				ev.Tool = &ToolUse{ID: c.ID, Name: c.Name, Input: c.Input}
+				ev.Kind = event.KindToolUse
+				ev.Tool = &event.ToolUse{ID: c.ID, Name: c.Name, Input: c.Input}
 				return ev, nil
 			}
 		}
 		return ev, nil
 
 	case "user":
-		// Tool result comes back as a user-role message with tool_result content.
 		var x struct {
 			Message struct {
 				Content []struct {
@@ -158,8 +94,8 @@ func Parse(line []byte) (Event, error) {
 		}
 		for _, c := range x.Message.Content {
 			if c.Type == "tool_result" {
-				ev.Kind = KindToolResult
-				ev.Result = &ToolResult{
+				ev.Kind = event.KindToolResult
+				ev.Result = &event.ToolResult{
 					ToolUseID: c.ToolUseID,
 					Content:   stringifyToolResult(c.Content),
 					IsError:   c.IsError,
@@ -171,7 +107,6 @@ func Parse(line []byte) (Event, error) {
 
 	case "result":
 		var x struct {
-			Subtype          string           `json:"subtype"`
 			IsError          bool             `json:"is_error"`
 			Result           string           `json:"result"`
 			DurationMS       int              `json:"duration_ms"`
@@ -183,8 +118,8 @@ func Parse(line []byte) (Event, error) {
 		if err := json.Unmarshal(line, &x); err != nil {
 			return ev, err
 		}
-		ev.Kind = KindFinal
-		ev.Final = &FinalResult{
+		ev.Kind = event.KindFinal
+		ev.Final = &event.Final{
 			SessionID:        x.SessionID,
 			IsError:          x.IsError,
 			Result:           x.Result,
@@ -194,16 +129,10 @@ func Parse(line []byte) (Event, error) {
 			PermissionDenied: x.PermissionDenied,
 		}
 		return ev, nil
-
-	case "rate_limit_event":
-		return ev, nil
 	}
-
 	return ev, nil
 }
 
-// Tool result content can be either a string or a list of content blocks.
-// We flatten to plain text for display.
 func stringifyToolResult(c any) string {
 	switch v := c.(type) {
 	case string:

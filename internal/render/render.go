@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wei/llmterm/internal/backend/claude"
+	"github.com/wei/llmterm/internal/event"
 )
 
 // ANSI helpers. Kept tiny on purpose — no TUI lib for MVP.
@@ -39,18 +39,18 @@ func (r *Renderer) c(code, s string) string {
 }
 
 // Handle one event. Returns the final SessionID once the stream ends, or "".
-func (r *Renderer) Handle(ev claude.Event) (sessionID string, done bool) {
+func (r *Renderer) Handle(ev event.Event) (sessionID string, done bool) {
 	switch ev.Kind {
-	case claude.KindInit:
+	case event.KindInit:
 		// Quiet: don't announce session start. The user just wants their answer.
 		return "", false
 
-	case claude.KindTextDelta:
+	case event.KindTextDelta:
 		r.textOpen = true
 		fmt.Fprint(r.w, ev.Text.Text)
 		return "", false
 
-	case claude.KindToolUse:
+	case event.KindToolUse:
 		if r.textOpen {
 			fmt.Fprintln(r.w)
 			r.textOpen = false
@@ -58,7 +58,7 @@ func (r *Renderer) Handle(ev claude.Event) (sessionID string, done bool) {
 		fmt.Fprintln(r.w, r.c(cyan, "▸ "+ev.Tool.Name)+r.c(dim, "  "+oneLineInput(ev.Tool.Input)))
 		return "", false
 
-	case claude.KindToolResult:
+	case event.KindToolResult:
 		if ev.Result.IsError {
 			fmt.Fprintln(r.w, r.c(red, "  ✗ ")+r.c(dim, truncate(ev.Result.Content, 200)))
 		} else {
@@ -66,7 +66,7 @@ func (r *Renderer) Handle(ev claude.Event) (sessionID string, done bool) {
 		}
 		return "", false
 
-	case claude.KindFinal:
+	case event.KindFinal:
 		if r.textOpen {
 			fmt.Fprintln(r.w)
 			r.textOpen = false
