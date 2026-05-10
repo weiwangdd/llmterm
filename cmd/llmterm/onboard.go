@@ -97,7 +97,7 @@ func cmdOnboard(args []string) int {
 	fmt.Println()
 	fmt.Println("\x1b[1mTry it\x1b[0m — open a new shell (`exec zsh`) and:")
 	fmt.Println("  llm   what files are in this directory")
-	fmt.Println("  llm!  当前系统内存占用率")
+	fmt.Println("  llm!  show current system memory usage")
 	if len(usable) > 1 {
 		fmt.Printf("  llm use %s\n", other(usable, pick))
 	}
