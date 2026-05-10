@@ -34,6 +34,8 @@ func main() {
 		os.Exit(cmdRun(os.Args[2:]))
 	case "use":
 		os.Exit(cmdUse(os.Args[2:]))
+	case "onboard":
+		os.Exit(cmdOnboard(os.Args[2:]))
 	case "doctor":
 		os.Exit(cmdDoctor())
 	case "init":
@@ -53,6 +55,9 @@ func usage(w io.Writer) {
 	fmt.Fprintf(w, `llmterm %s — terminal-native agent mode for your existing Claude / Codex / Gemini CLI
 
 Commands:
+  llmterm onboard [--yes] [--default <backend>]
+                                          First-use wizard: probe backends,
+                                          pick a default, set up ~/.zshrc.
   llmterm run [--unsafe] -- <prompt...>   Run one prompt against the selected backend.
   llmterm use [claude|codex|gemini]       Switch backend (no arg = claude).
   llmterm doctor                          Check the active backend is installed & authed.
@@ -362,7 +367,7 @@ __llmterm_dispatch() {
     "")
       command llmterm help
       ;;
-    use|doctor|version|help|init)
+    use|doctor|version|help|init|onboard)
       # Forward as llmterm subcommand. ${=rest} re-splits remaining args.
       command llmterm "$first" ${=rest}
       ;;
