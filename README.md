@@ -1,5 +1,7 @@
 # llmterm
 
+> [中文](README.zh.md) / English
+
 > **Disclaimer.** llmterm is an unofficial, third-party tool. It invokes the
 > Claude Code / Codex / Gemini CLI that **you** install and authenticate on
 > your own machine, using **your** subscription. It is not affiliated with,
