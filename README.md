@@ -65,6 +65,37 @@ Per-directory session continuity is automatic: a follow-up `llm ...` in the
 same directory within 2 hours resumes the previous conversation. State lives
 at `~/.local/state/llmterm/sessions.json`.
 
+### Slash commands
+
+```sh
+llm /usage           # subscription usage / limits panel
+llm /context         # context window breakdown
+llm /help            # claude's own help
+llm /clear           # clear the current session
+llm /compact         # compact the running context
+llm /insights        # usage insights report
+```
+
+These are the upstream CLI's built-in REPL panel commands. `llmterm` hands
+the TTY to claude so you see the full interactive panel; dismiss it with
+`/exit` or `Ctrl-D` to return to zsh.
+
+Other slash inputs — plugin commands, skills, and any non-panel slash like
+`/init`, `/loop`, `/superpowers:brainstorming` — flow through the normal
+streaming pipeline and run as regular agent prompts.
+
+### Backend switching
+
+```sh
+llm use            # back to default (claude)
+llm use codex      # OpenAI Codex
+llm use gemini     # Google Gemini
+```
+
+A confirmation card identifies the selected backend, the detected CLI
+version, and a "third-party wrapper · not affiliated" footer. The choice
+persists in `~/.config/llmterm/config.toml`.
+
 ## How it works
 
 `llmterm run -- "<prompt>"` execs `claude -p "<prompt>" --output-format

@@ -58,6 +58,21 @@ llm! 当前系统内存占用率
 
 `Ctrl-C` 中途取消，干净退回 prompt。
 
+### Slash 命令
+
+```sh
+llm /usage           # 订阅用量 / 套餐面板
+llm /context         # 上下文窗口占用明细
+llm /help            # claude 自己的帮助
+llm /clear           # 清空当前 session
+llm /compact         # 压缩上下文
+llm /insights        # 用量洞察报告
+```
+
+这些是上游 CLI 的内置 REPL 面板命令。llmterm 把 TTY 完整交给 claude，你看到完整交互界面；看完用 `/exit` 或 `Ctrl-D` 退回 zsh。
+
+其它 `/` 开头的输入——插件命令、技能、以及任何非面板 slash（如 `/init`、`/loop`、`/superpowers:brainstorming`）——会走标准流式管道，按普通 agent prompt 处理。
+
 ### 切换后端
 
 ```sh
