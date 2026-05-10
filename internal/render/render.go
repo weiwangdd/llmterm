@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wei/llmterm/internal/event"
+	"github.com/weiwangdd/llmterm/internal/event"
 )
 
 // ANSI helpers. Kept tiny on purpose — no TUI lib for MVP.

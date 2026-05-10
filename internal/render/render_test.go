@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wei/llmterm/internal/backend/claude"
-	"github.com/wei/llmterm/internal/event"
+	"github.com/weiwangdd/llmterm/internal/backend/claude"
+	"github.com/weiwangdd/llmterm/internal/event"
 )
 
 var _ = event.KindIgnored

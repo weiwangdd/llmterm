@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/wei/llmterm/internal/event"
+	"github.com/weiwangdd/llmterm/internal/event"
 )
 
 type Options struct {

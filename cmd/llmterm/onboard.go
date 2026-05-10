@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wei/llmterm/internal/backend"
-	"github.com/wei/llmterm/internal/config"
+	"github.com/weiwangdd/llmterm/internal/backend"
+	"github.com/weiwangdd/llmterm/internal/config"
 )
 
 // cmdOnboard runs the first-use wizard:

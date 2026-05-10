@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/wei/llmterm/internal/event"
+	"github.com/weiwangdd/llmterm/internal/event"
 )
 
 // Parse decodes one NDJSON line from `claude -p --output-format=stream-json`.

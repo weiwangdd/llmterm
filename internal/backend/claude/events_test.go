@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/wei/llmterm/internal/event"
+	"github.com/weiwangdd/llmterm/internal/event"
 )
 
 func TestParseFixture(t *testing.T) {

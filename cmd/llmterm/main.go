@@ -13,13 +13,13 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/wei/llmterm/internal/backend"
-	_ "github.com/wei/llmterm/internal/backend/claude"
-	_ "github.com/wei/llmterm/internal/backend/codex"
-	_ "github.com/wei/llmterm/internal/backend/gemini"
-	"github.com/wei/llmterm/internal/config"
-	"github.com/wei/llmterm/internal/render"
-	"github.com/wei/llmterm/internal/session"
+	"github.com/weiwangdd/llmterm/internal/backend"
+	_ "github.com/weiwangdd/llmterm/internal/backend/claude"
+	_ "github.com/weiwangdd/llmterm/internal/backend/codex"
+	_ "github.com/weiwangdd/llmterm/internal/backend/gemini"
+	"github.com/weiwangdd/llmterm/internal/config"
+	"github.com/weiwangdd/llmterm/internal/render"
+	"github.com/weiwangdd/llmterm/internal/session"
 )
 
 const version = "0.2.0"

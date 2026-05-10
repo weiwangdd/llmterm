@@ -12,8 +12,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/wei/llmterm/internal/backend"
-	"github.com/wei/llmterm/internal/event"
+	"github.com/weiwangdd/llmterm/internal/backend"
+	"github.com/weiwangdd/llmterm/internal/event"
 )
 
 func init() { backend.Register(&Backend{}) }
