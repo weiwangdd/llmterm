@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"sort"
 	"strings"
@@ -149,21 +150,134 @@ func cmdUse(args []string) int {
 		fmt.Fprintln(os.Stderr, "llmterm use:", err)
 		return 2
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 0)
-	cancel()
-	_ = ctx
-	if availErr := be.Available(context.Background()); availErr != nil {
-		fmt.Fprintln(os.Stderr, "warn:", availErr)
-		fmt.Fprintln(os.Stderr, "(saved anyway; install the CLI then run `llmterm doctor`)")
-	}
+
+	availErr := be.Available(context.Background())
 	cfg := config.Load()
 	cfg.Backend = name
 	if err := config.Save(cfg); err != nil {
 		fmt.Fprintln(os.Stderr, "llmterm use: save failed:", err)
 		return 1
 	}
-	fmt.Printf("backend: %s\n", name)
+
+	printSwitchBanner(name, availErr)
 	return 0
+}
+
+// printSwitchBanner draws a small confirmation card identifying the backend
+// the user just switched to, plus the detected CLI version and a "third-party
+// wrapper" footer for compliance. We DO NOT reproduce the upstream CLI's own
+// welcome screen — only refer to it nominatively.
+func printSwitchBanner(name string, availErr error) {
+	color := backendColor(name)
+	display, vendor := backendDisplay(name)
+	bin := backendBin(name)
+	version := detectVersion(bin)
+
+	if !isTTY(os.Stdout) {
+		// Plain output in non-interactive contexts (CI, pipes).
+		fmt.Printf("backend: %s (%s) via %s %s\n", name, vendor, bin, version)
+		if availErr != nil {
+			fmt.Fprintln(os.Stderr, "warn:", availErr)
+		}
+		return
+	}
+
+	const w = 56
+	top := "╭" + strings.Repeat("─", w-2) + "╮"
+	bot := "╰" + strings.Repeat("─", w-2) + "╯"
+	mid := func(left, right string) string {
+		// width-safe enough for ASCII content; we keep banner text ASCII.
+		pad := w - 4 - len(stripANSI(left)) - len(right)
+		if pad < 1 {
+			pad = 1
+		}
+		return "│ " + left + strings.Repeat(" ", pad) + right + " │"
+	}
+
+	bold := "\x1b[1m"
+	dim := "\x1b[2m"
+	reset := "\x1b[0m"
+
+	fmt.Println(color + top + reset)
+	fmt.Println(color + mid(bold+"llmterm"+reset+color+" → "+bold+display+reset+color, vendor) + reset)
+	if version != "" {
+		fmt.Println(color + mid(dim+"via "+bin+" "+version+reset+color, "") + reset)
+	} else if availErr != nil {
+		fmt.Println(color + mid(dim+"CLI not installed"+reset+color, "") + reset)
+	}
+	fmt.Println(color + mid(dim+"third-party wrapper · not affiliated"+reset+color, "") + reset)
+	fmt.Println(color + bot + reset)
+	if availErr != nil {
+		fmt.Fprintln(os.Stderr, "warn:", availErr)
+		fmt.Fprintln(os.Stderr, "(saved; install the CLI then run `llmterm doctor`)")
+	}
+}
+
+func backendColor(name string) string {
+	switch name {
+	case "claude":
+		return "\x1b[38;5;208m" // Anthropic-ish orange
+	case "codex":
+		return "\x1b[38;5;48m" // OpenAI-ish teal/green
+	case "gemini":
+		return "\x1b[38;5;75m" // Google-ish blue
+	}
+	return "\x1b[37m"
+}
+
+func backendDisplay(name string) (display, vendor string) {
+	switch name {
+	case "claude":
+		return "claude", "Anthropic"
+	case "codex":
+		return "codex", "OpenAI"
+	case "gemini":
+		return "gemini", "Google"
+	}
+	return name, ""
+}
+
+func backendBin(name string) string {
+	// Currently 1:1 between backend name and CLI binary name.
+	return name
+}
+
+func detectVersion(bin string) string {
+	if _, err := exec.LookPath(bin); err != nil {
+		return ""
+	}
+	out, err := exec.Command(bin, "--version").CombinedOutput()
+	if err != nil {
+		return ""
+	}
+	v := strings.TrimSpace(string(out))
+	// Take the first line; some CLIs print extra info.
+	if i := strings.IndexByte(v, '\n'); i >= 0 {
+		v = v[:i]
+	}
+	if len(v) > 32 {
+		v = v[:32]
+	}
+	return v
+}
+
+func stripANSI(s string) string {
+	var b strings.Builder
+	in := false
+	for _, r := range s {
+		if r == '\x1b' {
+			in = true
+			continue
+		}
+		if in {
+			if r == 'm' {
+				in = false
+			}
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func cmdDoctor() int {
