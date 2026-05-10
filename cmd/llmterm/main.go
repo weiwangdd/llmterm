@@ -211,6 +211,12 @@ func printSwitchBanner(name string, availErr error) {
 	}
 	line(mid(dim+"third-party wrapper · not affiliated"+reset+color, ""))
 	line(bot)
+	// Trailing blank line: when this is invoked from a zle widget, the
+	// `zle reset-prompt` that fires on widget exit redraws the prompt on
+	// whatever row the cursor is on. Without this extra newline, the redraw
+	// can land on top of the bottom border and clip it. The blank row gives
+	// reset-prompt its own line to draw on.
+	b.WriteByte('\n')
 	_, _ = os.Stdout.WriteString(b.String())
 	_ = os.Stdout.Sync()
 
