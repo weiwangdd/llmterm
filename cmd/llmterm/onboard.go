@@ -244,11 +244,8 @@ func ensureZshrcLine(path string, force bool) (bool, error) {
 			return false, fmt.Errorf("backup: %w", werr)
 		}
 	}
-	bin, _ := exec.LookPath("llmterm")
-	if bin == "" {
-		bin = "llmterm"
-	}
-	line := fmt.Sprintf("\n# added by llmterm onboard\neval \"$(%s init zsh)\"\n", bin)
+	bin := selfPath()
+	line := zshrcSnippet(bin, os.Getenv("PATH"), os.Getenv("HOME"))
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return false, err
@@ -258,6 +255,58 @@ func ensureZshrcLine(path string, force bool) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// selfPath returns the absolute path to the currently running llmterm
+// binary, falling back to `llmterm` (PATH lookup) when the OS can't tell
+// us — which would only happen on exotic builds.
+func selfPath() string {
+	if p, err := os.Executable(); err == nil {
+		if abs, err := filepath.Abs(p); err == nil {
+			return abs
+		}
+		return p
+	}
+	if p, err := exec.LookPath("llmterm"); err == nil {
+		return p
+	}
+	return "llmterm"
+}
+
+// zshrcSnippet renders the block appended to ~/.zshrc. If bin's directory
+// isn't already in PATH, we prepend an `export PATH=...` line so the
+// `command llmterm` calls inside the eval'd plugin can resolve. The eval
+// itself uses an absolute path so it never depends on PATH.
+func zshrcSnippet(bin, pathEnv, home string) string {
+	display := bin
+	if home != "" && strings.HasPrefix(bin, home+string(os.PathSeparator)) {
+		display = "$HOME" + bin[len(home):]
+	}
+	var b strings.Builder
+	b.WriteString("\n# added by llmterm onboard\n")
+	if dir := filepath.Dir(bin); dir != "" && dir != "." && !pathContains(pathEnv, dir) {
+		displayDir := dir
+		if home != "" && strings.HasPrefix(dir, home+string(os.PathSeparator)) {
+			displayDir = "$HOME" + dir[len(home):]
+		} else if dir == home {
+			displayDir = "$HOME"
+		}
+		fmt.Fprintf(&b, "export PATH=\"%s:$PATH\"\n", displayDir)
+	}
+	fmt.Fprintf(&b, "eval \"$(%s init zsh)\"\n", display)
+	return b.String()
+}
+
+func pathContains(pathEnv, dir string) bool {
+	if pathEnv == "" {
+		return false
+	}
+	for _, p := range strings.Split(pathEnv, string(os.PathListSeparator)) {
+		if p == dir {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(xs []string, x string) bool {

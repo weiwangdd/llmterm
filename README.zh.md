@@ -6,7 +6,7 @@
 
 在 iTerm2 / Ghostty / Terminal.app 等任意终端里，键入 `llm <自然语言>` 或 `llm! <自然语言>` 就能让 agent 帮你做事——查文件、改配置、运行命令、查询信息——全程不离开当前终端。底层是你已登录的 Claude Code（或 Codex / Gemini）订阅，llmterm 只是一层 zsh widget + Go 二进制的薄壳。
 
-## 安装（macOS, zsh）
+## 安装（macOS / Linux, zsh）
 
 前置要求：Go ≥ 1.22；以及至少一个上游 CLI 已装且已登录：
 - [Claude Code](https://docs.anthropic.com/claude/docs/claude-code)（默认后端）
@@ -129,11 +129,11 @@ llmterm version                           打印版本号
 
 ## 当前 MVP 范围
 
-支持：macOS、zsh、Claude Code / Codex / Gemini 后端。
+支持：macOS 与 Linux、zsh、Claude Code / Codex / Gemini 后端。
 
 暂不支持（计划在 v2）：
 - bash、fish、PowerShell
-- Linux、Windows
+- Windows
 - 多行 / heredoc 内联输入
 - 持久化 transcript 浏览界面
 - 设置 UI（目前只能编辑 TOML）

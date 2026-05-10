@@ -19,7 +19,7 @@ already logged in to, streams the agent loop into your terminal, and drops you
 back at the prompt when it's done. Works in iTerm2, Ghostty, Terminal.app, and
 any other emulator, because llmterm is just an ordinary command.
 
-## Install (macOS, zsh)
+## Install (macOS / Linux, zsh)
 
 Prereqs: Go ≥ 1.22 and at least one upstream agent CLI installed +
 authenticated:
@@ -74,8 +74,8 @@ final summary) to your TTY. No PTY interception, no API key, no extra billing.
 
 ## Scope (MVP)
 
-Supported: macOS, zsh, Claude Code backend. bash/fish, Codex/Gemini backends,
-and Linux/Windows are planned for v2.
+Supported: macOS and Linux, zsh, Claude Code backend. bash/fish, Codex/Gemini
+backends, and Windows are planned for v2.
 
 ## License
 

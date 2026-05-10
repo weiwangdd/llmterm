@@ -39,8 +39,8 @@ say "installed: $BIN"
 
 case ":$PATH:" in
   *":$GOBIN:"*) ;;
-  *) warn "$GOBIN is not in your PATH.
-   Add this to your shell rc:  export PATH=\"$GOBIN:\$PATH\"" ;;
+  *) warn "$GOBIN is not in your PATH — onboard will add it to ~/.zshrc.
+   After onboard finishes, open a new shell (or 'exec zsh')." ;;
 esac
 
 # Hand off to onboard. It probes backends, picks a default, and offers
