@@ -186,7 +186,6 @@ func printSwitchBanner(name string, availErr error) {
 	top := "╭" + strings.Repeat("─", w-2) + "╮"
 	bot := "╰" + strings.Repeat("─", w-2) + "╯"
 	mid := func(left, right string) string {
-		// width-safe enough for ASCII content; we keep banner text ASCII.
 		pad := w - 4 - len(stripANSI(left)) - len(right)
 		if pad < 1 {
 			pad = 1
@@ -198,15 +197,23 @@ func printSwitchBanner(name string, availErr error) {
 	dim := "\x1b[2m"
 	reset := "\x1b[0m"
 
-	fmt.Println(color + top + reset)
-	fmt.Println(color + mid(bold+"llmterm"+reset+color+" → "+bold+display+reset+color, vendor) + reset)
+	// Compose all lines into one buffer and write atomically. When invoked
+	// from a zle widget, splitting this across multiple Println calls races
+	// with `zle reset-prompt`, occasionally clipping the bottom border.
+	var b strings.Builder
+	line := func(s string) { b.WriteString(color); b.WriteString(s); b.WriteString(reset); b.WriteByte('\n') }
+	line(top)
+	line(mid(bold+"llmterm"+reset+color+" → "+bold+display+reset+color, vendor))
 	if version != "" {
-		fmt.Println(color + mid(dim+"via "+bin+" "+version+reset+color, "") + reset)
+		line(mid(dim+"via "+bin+" "+version+reset+color, ""))
 	} else if availErr != nil {
-		fmt.Println(color + mid(dim+"CLI not installed"+reset+color, "") + reset)
+		line(mid(dim+"CLI not installed"+reset+color, ""))
 	}
-	fmt.Println(color + mid(dim+"third-party wrapper · not affiliated"+reset+color, "") + reset)
-	fmt.Println(color + bot + reset)
+	line(mid(dim+"third-party wrapper · not affiliated"+reset+color, ""))
+	line(bot)
+	_, _ = os.Stdout.WriteString(b.String())
+	_ = os.Stdout.Sync()
+
 	if availErr != nil {
 		fmt.Fprintln(os.Stderr, "warn:", availErr)
 		fmt.Fprintln(os.Stderr, "(saved; install the CLI then run `llmterm doctor`)")
