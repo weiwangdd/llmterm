@@ -355,19 +355,25 @@ __llmterm_dispatch() {
   BUFFER=""
   zle -I
   print -rP -- "%B%F{cyan}❯%f%b $buf"
-  if [[ "$args" == "use"* ]]; then
-    # Subcommand: switch backend. Arg shape: "use" or "use <name>".
-    local sub="${args#use}"; sub="${sub# }"
-    command llmterm use $sub
-  elif [[ -z "$args" ]]; then
-    command llmterm help
-  else
-    if [[ -n "$mode" ]]; then
-      command llmterm run $mode -- "$args"
-    else
-      command llmterm run -- "$args"
-    fi
-  fi
+  # First token decides whether this is an llmterm subcommand or a prompt.
+  local first="${args%% *}" rest=""
+  if [[ "$args" == *" "* ]]; then rest="${args#* }"; fi
+  case "$first" in
+    "")
+      command llmterm help
+      ;;
+    use|doctor|version|help|init)
+      # Forward as llmterm subcommand. ${=rest} re-splits remaining args.
+      command llmterm "$first" ${=rest}
+      ;;
+    *)
+      if [[ -n "$mode" ]]; then
+        command llmterm run $mode -- "$args"
+      else
+        command llmterm run -- "$args"
+      fi
+      ;;
+  esac
   zle reset-prompt
 }
 zle -N __llmterm_dispatch
