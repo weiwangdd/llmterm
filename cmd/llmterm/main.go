@@ -83,6 +83,14 @@ func cmdRun(args []string) int {
 
 	cwd, _ := os.Getwd()
 	cfg := config.Load()
+
+	// Slash commands (e.g. "/usage", "/context") are REPL-only features of
+	// the upstream CLI — they don't survive `-p` non-interactive mode. Hand
+	// the TTY to the backend binary directly so the user sees the real
+	// interactive output. See dispatchSlash for details.
+	if strings.HasPrefix(prompt, "/") {
+		return dispatchSlash(cfg.Backend, prompt)
+	}
 	be, err := backend.Get(cfg.Backend)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "llmterm:", err)
@@ -140,6 +148,38 @@ func cmdRun(args []string) int {
 		store.Save(resumeKey, sid)
 	}
 	if !sawFinal {
+		return 1
+	}
+	return 0
+}
+
+// dispatchSlash hands the TTY directly to the active backend's CLI so
+// the user can run a REPL panel command like /usage, /context, /help.
+// Inheriting stdin/stdout/stderr means the upstream CLI sees a real TTY
+// on every fd and renders its full interactive UI — the user dismisses
+// the panel and types /exit (or Ctrl-D) to return to zsh.
+//
+// We tried fancier PTY+auto-exit variants; each had emulator-specific
+// edge cases (capability-reply timing, alt-screen reset, ZLE TTY state).
+// Inheritance is simple and reliable — at the cost of one extra step
+// (/exit) when the user is done reading.
+func dispatchSlash(backendName, slashCmd string) int {
+	bin := backendBin(backendName)
+	if _, err := exec.LookPath(bin); err != nil {
+		fmt.Fprintf(os.Stderr, "llmterm: %s CLI not found in PATH\n", bin)
+		return 1
+	}
+	fmt.Fprintf(os.Stderr, "\x1b[2m(%s %s — type /exit or Ctrl-D to return)\x1b[0m\n", bin, slashCmd)
+
+	cmd := exec.Command(bin, slashCmd)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		if ee, ok := err.(*exec.ExitError); ok {
+			return ee.ExitCode()
+		}
+		fmt.Fprintln(os.Stderr, "llmterm:", err)
 		return 1
 	}
 	return 0
