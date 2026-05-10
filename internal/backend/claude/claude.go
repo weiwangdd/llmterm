@@ -21,16 +21,29 @@ const (
 	writeTools    = "Read Glob Grep WebFetch WebSearch Bash Edit Write"
 )
 
-const nonInteractiveSystemPrompt = `You are running inside llmterm, a non-interactive single-shot session.
+const readOnlySystemPrompt = `You are running inside llmterm, a non-interactive single-shot session.
 There is NO user input channel during this turn — you cannot ask the user any
 questions and cannot wait for approval. Do not write text like "shall I…",
 "do you allow…", "请授权…". Just act with the tools you have.
 
-If a tool you would need is not currently allowed (e.g. Bash, Edit, Write are
-typically only allowed when the user runs ` + "`llm!`" + ` instead of ` + "`llm`" + `),
-do not ask. Instead, finish with a brief one-line note like:
+The currently allowed tools are read-only (Read, Glob, Grep, WebFetch, WebSearch).
+Bash, Edit, and Write are NOT allowed in this session. If the task genuinely
+needs one of those, do not ask — finish with one short line like:
   "(needs Bash; rerun: llm! <same prompt>)"
 and stop. Be concise: this output goes straight to the user's terminal.`
+
+const unsafeSystemPrompt = `You are running inside llmterm, a non-interactive single-shot session.
+There is NO user input channel during this turn — you cannot ask the user any
+questions and cannot wait for approval. Do not write text like "shall I…",
+"do you allow…", "请授权…".
+
+The user has explicitly enabled write/exec tools by invoking llmterm in
+` + "`llm!`" + ` mode. Bash, Edit, Write, Read, Glob, Grep, WebFetch, and
+WebSearch are ALL allowed. Use them freely to complete the task. Do not
+refuse to act, do not suggest the user "rerun with llm!" — they already
+did. Only stop if the task is genuinely impossible (e.g. requires sudo
+on a system you can't elevate to), in which case explain in one short
+line what's missing.`
 
 type Backend struct{}
 
@@ -45,15 +58,17 @@ func (b *Backend) Available(ctx context.Context) error {
 
 func (b *Backend) Run(ctx context.Context, opts backend.Options) (<-chan event.Event, <-chan error, error) {
 	tools := readOnlyTools
+	systemPrompt := readOnlySystemPrompt
 	if opts.Unsafe {
 		tools = writeTools
+		systemPrompt = unsafeSystemPrompt
 	}
 	args := []string{
 		"-p", opts.Prompt,
 		"--output-format", "stream-json",
 		"--include-partial-messages",
 		"--verbose",
-		"--append-system-prompt", nonInteractiveSystemPrompt,
+		"--append-system-prompt", systemPrompt,
 		"--allowedTools", tools,
 	}
 	if opts.CWD != "" {
