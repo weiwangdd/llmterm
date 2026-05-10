@@ -227,10 +227,11 @@ __llmterm_dispatch() {
     zle accept-line
     return
   fi
-  # Echo the original line so it appears in scrollback like a normal command.
-  print -P "%B%F{cyan}❯%f%b $buf"
+  # Move past the prompt line zsh already drew, then echo the original
+  # input on its own line so it appears in scrollback like a normal command.
   BUFFER=""
-  zle reset-prompt
+  zle -I
+  print -rP -- "%B%F{cyan}❯%f%b $buf"
   if [[ -n "$mode" ]]; then
     command llmterm run $mode -- "$prompt"
   else

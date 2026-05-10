@@ -9,6 +9,17 @@ import (
 	"strings"
 )
 
+const nonInteractiveSystemPrompt = `You are running inside llmterm, a non-interactive single-shot session.
+There is NO user input channel during this turn — you cannot ask the user any
+questions and cannot wait for approval. Do not write text like "shall I…",
+"do you allow…", "请授权…". Just act with the tools you have.
+
+If a tool you would need is not currently allowed (e.g. Bash, Edit, Write are
+typically only allowed when the user runs ` + "`llm!`" + ` instead of ` + "`llm`" + `),
+do not ask. Instead, finish with a brief one-line note like:
+  "(needs Bash; rerun: llm! <same prompt>)"
+and stop. Be concise: this output goes straight to the user's terminal.`
+
 // Options drives one invocation of the claude CLI.
 type Options struct {
 	Prompt       string
@@ -28,6 +39,7 @@ func Run(ctx context.Context, opts Options) (<-chan Event, <-chan error, error) 
 		"--output-format", "stream-json",
 		"--include-partial-messages",
 		"--verbose",
+		"--append-system-prompt", nonInteractiveSystemPrompt,
 	}
 	if opts.CWD != "" {
 		args = append(args, "--add-dir", opts.CWD)
