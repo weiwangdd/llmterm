@@ -13,8 +13,19 @@
 - [Codex CLI](https://github.com/openai/codex)（可选）
 - [Gemini CLI](https://github.com/google-gemini/gemini-cli)（可选）
 
+**一键安装**：
+
 ```sh
-make install
+curl -fsSL https://raw.githubusercontent.com/weiwangdd/llmterm/main/install.sh | bash
+```
+
+脚本会：① 用 `go install` 装好二进制；② 调 `llmterm onboard` 让你选默认后端、可选地把 `eval` 行写进 `~/.zshrc`。完事开新 shell 即可。
+
+**从源码装**：
+
+```sh
+git clone https://github.com/weiwangdd/llmterm
+cd llmterm && make install
 echo 'eval "$($HOME/.local/bin/llmterm init zsh)"' >> ~/.zshrc
 exec zsh
 llmterm doctor

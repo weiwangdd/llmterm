@@ -21,11 +21,26 @@ any other emulator, because llmterm is just an ordinary command.
 
 ## Install (macOS, zsh)
 
-Prereqs: Go ≥ 1.22, [Claude Code](https://docs.anthropic.com/claude/docs/claude-code)
-installed and logged in (`claude /login` once).
+Prereqs: Go ≥ 1.22 and at least one upstream agent CLI installed +
+authenticated:
+- [Claude Code](https://docs.anthropic.com/claude/docs/claude-code) (default backend)
+- [Codex CLI](https://github.com/openai/codex) (optional)
+- [Gemini CLI](https://github.com/google-gemini/gemini-cli) (optional)
+
+**One-liner**:
 
 ```sh
-make install
+curl -fsSL https://raw.githubusercontent.com/weiwangdd/llmterm/main/install.sh | bash
+```
+
+This `go install`s the binary and runs `llmterm onboard` so you can pick a
+backend and (optionally) wire up `~/.zshrc`. Then open a new shell.
+
+**From source**:
+
+```sh
+git clone https://github.com/weiwangdd/llmterm
+cd llmterm && make install
 echo 'eval "$($HOME/.local/bin/llmterm init zsh)"' >> ~/.zshrc
 exec zsh
 llmterm doctor
